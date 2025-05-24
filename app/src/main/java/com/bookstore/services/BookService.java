@@ -1,48 +1,62 @@
 package com.bookstore.services;
 
-import com.bookstore.dao.api.BookRepository;
-import com.bookstore.dao.impl.utils.impl.BookFinder;
+import com.bookstore.repository.JpaBookRepository;
 import com.bookstore.domain.Book;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
+@Transactional(readOnly = true)
 @Service
 public class BookService {
-    private final BookRepository bookRepository;
 
-    public BookService(BookRepository bookRepository) {
+    private final JpaBookRepository bookRepository;
+
+    public BookService(JpaBookRepository bookRepository) {
         this.bookRepository = bookRepository;
     }
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+
+    @Transactional
     public void addBook(Book book) {
         Objects.requireNonNull(book, "Book cannot be null");
-        bookRepository.add(book);
+        bookRepository.save(book);
     }
-    @PreAuthorize("permitAll()")
+
     public Optional<Book> findBookById(UUID id) {
         Objects.requireNonNull(id, "ID cannot be null");
-        List<Book> books = bookRepository.findById(id);
-        return books.isEmpty() ? Optional.empty() : Optional.of(books.getFirst());
+        return bookRepository.findById(id);
     }
-    @PreAuthorize("permitAll()")
+
     public Map<String, List<Book>> groupBooksByGenre() {
         return bookRepository.findAll().stream()
-                .collect(Collectors.groupingBy(Book::getGenre));
+                .collect(Collectors.groupingBy(book -> book.getGenre().toLowerCase()));
     }
-    @PreAuthorize("permitAll()")
+
     public List<Book> getAllBooks() {
         return bookRepository.findAll();
     }
-    @PreAuthorize("hasRole('ADMIN')")
+
+    @Transactional
     public boolean removeBook(UUID id) {
         Objects.requireNonNull(id, "ID cannot be null");
-        return bookRepository.deleteById(id);
+        if (bookRepository.existsById(id)) {
+            bookRepository.deleteById(id);
+            return true;
+        }
+        return false;
     }
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
-    public BookFinder createBookFinder() {
-        return bookRepository.newFinder();
+
+    public List<Book> findByAuthor(String author) {
+        return bookRepository.findByAuthorContainingIgnoreCase(author);
+    }
+
+    public List<Book> findByTitle(String title) {
+        return bookRepository.findByTitleContainingIgnoreCase(title);
+    }
+
+    public List<Book> findByGenre(String genre) {
+        return bookRepository.findByGenreContainingIgnoreCase(genre);
     }
 }

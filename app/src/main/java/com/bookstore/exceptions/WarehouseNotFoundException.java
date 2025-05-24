@@ -4,9 +4,9 @@ import java.util.UUID;
 
 public class WarehouseNotFoundException extends WarehouseException {
   public WarehouseNotFoundException(UUID warehouseId) {
-    super("Склад с ID " + warehouseId + " не найден");
+    super("Warehouse with ID " + warehouseId + " not found");
   }
   public WarehouseNotFoundException(UUID warehouseId, Throwable cause) {
-    super("Склад с ID " + warehouseId + " не найден", cause);
+    super("Warehouse with ID " + warehouseId + " not found", cause);
   }
 }

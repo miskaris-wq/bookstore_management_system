@@ -23,11 +23,4 @@ public class OrderItemDTO {
         this.quantity = quantity;
     }
 
-    public BigDecimal getItemTotal() {
-        return itemTotal;
-    }
-
-    public void setItemTotal(BigDecimal itemTotal) {
-        this.itemTotal = itemTotal;
-    }
 }

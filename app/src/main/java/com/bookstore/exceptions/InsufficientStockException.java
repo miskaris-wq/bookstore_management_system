@@ -7,7 +7,7 @@ public class InsufficientStockException extends WarehouseException {
 
     public InsufficientStockException(String title, int available, int requested) {
         super(String.format(
-                "Недостаточно товара. Книга: %s, Доступно: %d, Запрошено: %d",
+                "Not enough stock. Book: %s, Available: %d, Requested: %d",
                 title, available, requested
         ));
         this.title = title;

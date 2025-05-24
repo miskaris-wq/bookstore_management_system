@@ -1,43 +1,48 @@
 package com.bookstore.domain;
 
-import java.util.UUID;
+import jakarta.persistence.*;
 import java.util.Objects;
 
+@Entity
+@Table(name = "physic_stores")
 public class PhysicStore extends InventoryHolder {
-    private final UUID id;
-    private final String name;
-    private final String address;
+
+    @Column(nullable = false)
+    private String name;
+
+    public PhysicStore() {}
 
     public PhysicStore(String name, String address) {
-        if (name == null || name.trim().isEmpty()) {
-            throw new IllegalArgumentException("Store name cannot be empty");
-        }
-        this.id = UUID.randomUUID();
-        this.name = name.trim();
-        this.address = Objects.requireNonNull(address, "Address cannot be null");
-    }
-
-    // Уникальные методы для PhysicStore
-    public UUID getId() {
-        return id;
+        this.name = Objects.requireNonNull(name, "Name cannot be null");
+        setAddress(address);
     }
 
     public String getName() {
         return name;
     }
 
-    public String getAddress() {
-        return address;
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == null || getClass() != o.getClass()) return false;
+        PhysicStore that = (PhysicStore) o;
+        return Objects.equals(getName(), that.getName());
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(getName());
     }
 
     @Override
     public String toString() {
-        return "Store {" +
-                "ID='" + id + '\'' +
+        return "PhysicStore{" +
+                "ID=" + getId() +
                 ", Name='" + name + '\'' +
-                ", Address='" + address + '\'' +
-                ", TotalItems=" + getInventory().values().stream().mapToInt(Integer::intValue).sum() +
-                ", UniqueItems=" + getInventory().size() +
+                ", Address='" + getAddress() + '\'' +
                 '}';
     }
 }

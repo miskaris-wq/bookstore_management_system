@@ -1,12 +1,16 @@
-package com.bookstore.mapper;
+package com.bookstore.mapper.impl;
 
 import com.bookstore.domain.Book;
 import com.bookstore.dto.BookDTO;
-
 import java.util.UUID;
 
-public class BookMapper {
-    public static BookDTO toDTO(Book book) {
+import com.bookstore.mapper.api.GenericMapper;
+import org.springframework.stereotype.Component;
+
+@Component
+public class BookMapper implements GenericMapper<BookDTO, Book> {
+    @Override
+    public BookDTO toDTO(Book book) {
         BookDTO dto = new BookDTO();
         dto.setId(book.getId());
         dto.setTitle(book.getTitle());
@@ -16,7 +20,9 @@ public class BookMapper {
         dto.setPublicationYear(book.getPublicationYear());
         return dto;
     }
-    public static Book fromDTO(BookDTO dto) {
+
+    @Override
+    public Book fromDTO(BookDTO dto) {
         if (dto == null) return null;
 
         UUID id = dto.getId() != null ? dto.getId() : UUID.randomUUID();

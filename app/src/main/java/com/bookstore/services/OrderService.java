@@ -1,37 +1,94 @@
 package com.bookstore.services;
 
-import com.bookstore.dao.api.OrderRepository;
 import com.bookstore.domain.Order;
-import org.springframework.security.access.prepost.PreAuthorize;
+import com.bookstore.domain.OrderItem;
+import com.bookstore.domain.OrderStatus;
+import com.bookstore.repository.JpaOrderRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
+@Transactional(readOnly = true)
 @Service
 public class OrderService {
-    private final OrderRepository orderRepository;
 
-    public OrderService(OrderRepository orderRepository) {
+    private final JpaOrderRepository orderRepository;
+
+    public OrderService(JpaOrderRepository orderRepository) {
         this.orderRepository = Objects.requireNonNull(orderRepository);
     }
-    @PreAuthorize("#customer == authentication.name or hasAnyRole('ADMIN', 'STAFF')")
+
     public List<Order> findOrdersByCustomer(String customer) {
         validateStringParam(customer, "Customer name");
-        return orderRepository.findByCustomer(customer);
+        return orderRepository.findByCustomerNameContainingIgnoreCase(customer);
     }
-    @PreAuthorize("@orderSecurityService.canAccessOrder(authentication, #id) or hasRole('ADMIN')")
+
     public Optional<Order> findOrderById(UUID id) {
         Objects.requireNonNull(id, "Order ID cannot be null");
-        List<Order> orders = orderRepository.findById(id);
-        return orders.isEmpty() ? Optional.empty() : Optional.of(orders.getFirst());
+        return orderRepository.findById(id);
     }
-    @PreAuthorize("hasAnyRole('ADMIN', 'CUSTOMER')")
-    public void saveOrder(Order order) {
+
+    @Transactional
+    public Order saveOrder(Order order) {
         Objects.requireNonNull(order, "Order cannot be null");
-        orderRepository.add(order);
+        return orderRepository.save(order);
+    }
+
+    public BigDecimal calculateOrderTotal(Order order) {
+        Objects.requireNonNull(order, "Order cannot be null");
+        return order.getOrderItems().stream()
+                .map(this::calculateItemTotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    @Transactional
+    public void processOrder(Order order) {
+        Objects.requireNonNull(order, "Order cannot be null");
+        if (order.getStatus() != OrderStatus.NEW) {
+            throw new IllegalStateException("An order can only be processed from the NEW status");
+        }
+        order.setStatus(OrderStatus.PROCESSING);
+        orderRepository.save(order);
+    }
+
+    @Transactional
+    public void shipOrder(Order order) {
+        Objects.requireNonNull(order, "Order cannot be null");
+        if (order.getStatus() != OrderStatus.PROCESSED) {
+            throw new IllegalStateException("The order must be PROCESSED before shipping.");
+        }
+        order.setStatus(OrderStatus.SHIPPED);
+        orderRepository.save(order);
+    }
+
+    @Transactional
+    public void deliverOrder(Order order) {
+        Objects.requireNonNull(order, "Order cannot be null");
+        if (order.getStatus() != OrderStatus.SHIPPED) {
+            throw new IllegalStateException("The order must be SHIPPED before delivery");
+        }
+        order.setStatus(OrderStatus.DELIVERED);
+        orderRepository.save(order);
+    }
+
+    @Transactional
+    public void cancelOrder(Order order) {
+        Objects.requireNonNull(order, "Order cannot be null");
+        if (order.getStatus() == OrderStatus.DELIVERED || order.getStatus() == OrderStatus.SHIPPED) {
+            throw new IllegalStateException("Order cannot be CANCELLED after shipping");
+        }
+        order.setStatus(OrderStatus.CANCELLED);
+        orderRepository.save(order);
+    }
+
+    public BigDecimal calculateItemTotal(OrderItem item) {
+        return item.getBook().getPrice()
+                .multiply(BigDecimal.valueOf(item.getQuantity()));
     }
 
     private void validateStringParam(String param, String paramName) {

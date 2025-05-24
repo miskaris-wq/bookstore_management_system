@@ -1,7 +1,7 @@
 package test;
 
-import com.bookstore.dao.api.OrderRepository;
 import com.bookstore.domain.Order;
+import com.bookstore.repository.JpaOrderRepository;
 import com.bookstore.services.OrderService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,7 +21,7 @@ import static org.mockito.Mockito.*;
 class OrderServiceTest {
 
     @Mock
-    private OrderRepository orderRepository;
+    private JpaOrderRepository orderRepository;
 
     @InjectMocks
     private OrderService orderService;
@@ -40,7 +40,7 @@ class OrderServiceTest {
 
     @Test
     void findOrderById_ShouldReturnOrder_WhenOrderExists() {
-        when(orderRepository.findById(orderId)).thenReturn(List.of(order));
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
         Optional<Order> result = orderService.findOrderById(orderId);
         assertTrue(result.isPresent());
         assertEquals(order, result.get());
@@ -48,7 +48,7 @@ class OrderServiceTest {
 
     @Test
     void findOrderById_ShouldReturnEmpty_WhenOrderDoesNotExist() {
-        when(orderRepository.findById(orderId)).thenReturn(List.of());
+        when(orderRepository.findById(orderId)).thenReturn(Optional.empty());
         Optional<Order> result = orderService.findOrderById(orderId);
         assertTrue(result.isEmpty());
     }
@@ -61,10 +61,10 @@ class OrderServiceTest {
     @Test
     void findOrdersByCustomer_ShouldReturnOrders_WhenCustomerExists() {
         String customer = "customer@example.com";
-        when(orderRepository.findByCustomer(customer)).thenReturn(List.of(order));
+        when(orderRepository.findByCustomerNameContainingIgnoreCase(customer)).thenReturn(List.of(order));
         List<Order> result = orderService.findOrdersByCustomer(customer);
         assertEquals(1, result.size());
-        assertEquals(order, result.getFirst());
+        assertEquals(order, result.get(0));
     }
 
     @Test
@@ -73,9 +73,11 @@ class OrderServiceTest {
     }
 
     @Test
-    void saveOrder_ShouldCallRepositoryAdd() {
-        orderService.saveOrder(order);
-        verify(orderRepository, times(1)).add(order);
+    void saveOrder_ShouldCallRepositorySave() {
+        when(orderRepository.save(order)).thenReturn(order);
+        Order saved = orderService.saveOrder(order);
+        verify(orderRepository, times(1)).save(order);
+        assertEquals(order, saved);
     }
 
     @Test

@@ -1,20 +1,40 @@
 package com.bookstore.domain;
 
+import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.util.Objects;
 import java.util.UUID;
 
+@Entity
+@Table(name = "books")
 public class Book {
-    private final UUID id;            // Уникальный идентификатор книги
-    private final String title;        // Название книги
-    private final String author;       // Автор книги
-    private final String genre;        // Жанр книги
-    private final BigDecimal price;       // Цена книги
-    private final int publicationYear; // Год издания
+
+    @Id
+    @GeneratedValue
+    @Column(name = "id", columnDefinition = "BINARY(16)")
+    private UUID id;
+
+    @Column(nullable = false)
+    private String title;
+
+    @Column(nullable = false)
+    private String author;
+
+    @Column(nullable = false)
+    private String genre;
+
+    @Column(nullable = false)
+    private BigDecimal price;
+
+    @Column(name = "publication_year", nullable = false)
+    private int publicationYear;
+
+    public Book() {
+    }
 
     public Book(UUID id, String title, String author, String genre,
                 BigDecimal price, int publicationYear) {
-        this.id = Objects.requireNonNull(id, "ID книги не может быть null");
+        this.id = Objects.requireNonNull(id, "Book ID cannot be null");
         this.title = validateTitle(title);
         this.author = validateAuthor(author);
         this.genre = validateGenre(genre);
@@ -29,31 +49,28 @@ public class Book {
 
     private String validateTitle(String title) {
         if (title == null || title.trim().isEmpty()) {
-            throw new IllegalArgumentException("Название книги не может быть пустым");
+            throw new IllegalArgumentException("Title cannot be empty or null");
         }
         return title.trim().toLowerCase();
     }
 
     private String validateAuthor(String author) {
         if (author == null || author.trim().isEmpty()) {
-            throw new IllegalArgumentException("Автор не может быть пустым");
+            throw new IllegalArgumentException("Author cannot be empty or null");
         }
         return author.trim().toLowerCase();
     }
 
     private String validateGenre(String genre) {
         if (genre == null || genre.trim().isEmpty()) {
-            throw new IllegalArgumentException("Жанр не может быть пустым");
+            throw new IllegalArgumentException("Genre cannot be empty or null");
         }
         return genre.trim().toLowerCase();
     }
 
     private BigDecimal validatePrice(BigDecimal price) {
-        if (price == null) {
-            throw new IllegalArgumentException("Цена должна быть положительной");
-        }
-        if (price.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("Цена должна быть положительной");
+        if (price == null || price.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Price must be positive");
         }
         return price;
     }
@@ -61,12 +78,10 @@ public class Book {
     private int validateYear(int year) {
         int currentYear = java.time.Year.now().getValue();
         if (year < 0 || year > currentYear) {
-            throw new IllegalArgumentException(
-                    String.format("Год издания должен быть между 0 и %d", currentYear));
+            throw new IllegalArgumentException("Incorrect year of publication");
         }
         return year;
     }
-
 
     public UUID getId() {
         return id;
@@ -92,23 +107,45 @@ public class Book {
         return publicationYear;
     }
 
+    public void setId(UUID id) {
+        this.id = id;
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
+    }
+
+    public void setAuthor(String author) {
+        this.author = author;
+    }
+
+    public void setGenre(String genre) {
+        this.genre = genre;
+    }
+
+    public void setPrice(BigDecimal price) {
+        this.price = price;
+    }
+
+    public void setPublicationYear(int publicationYear) {
+        this.publicationYear = publicationYear;
+    }
+
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         Book book = (Book) o;
-        return id.equals(book.id);
+        return getPublicationYear() == book.getPublicationYear() && Objects.equals(getId(), book.getId()) && Objects.equals(getTitle(), book.getTitle()) && Objects.equals(getAuthor(), book.getAuthor()) && Objects.equals(getGenre(), book.getGenre()) && Objects.equals(getPrice(), book.getPrice());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id);
+        return Objects.hash(getId(), getTitle(), getAuthor(), getGenre(), getPrice(), getPublicationYear());
     }
 
     @Override
     public String toString() {
-        return String.format("Книга [ID: %s, Название: %s, Автор: %s, Жанр: %s, Цена: %.2f, Год: %d]",
+        return String.format("Book [ID: %s, Title: %s, Author: %s, Genre: %s, Price: %.2f, Year: %d]",
                 id, title, author, genre, price, publicationYear);
     }
-
 }

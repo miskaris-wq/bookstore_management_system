@@ -4,9 +4,9 @@ import java.util.UUID;
 
 public class PhysicStoreNotFoundException extends PhysicStoreExeption {
     public PhysicStoreNotFoundException(UUID storeId) {
-      super("Склад с ID " + storeId + " не найден");
+      super("Store with ID " + storeId + " not found");
     }
   public PhysicStoreNotFoundException(UUID storeId, Throwable cause) {
-    super("Склад с ID " + storeId + " не найден", cause);
+    super("Store with ID " + storeId + " not found", cause);
   }
 }

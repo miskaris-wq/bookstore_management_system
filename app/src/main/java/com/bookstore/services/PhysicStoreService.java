@@ -1,67 +1,45 @@
 package com.bookstore.services;
 
-import com.bookstore.dao.api.PhysicStoreRepository;
-import com.bookstore.domain.Book;
 import com.bookstore.domain.InventoryHolder;
 import com.bookstore.domain.PhysicStore;
-import com.bookstore.exceptions.InsufficientStockException;
 import com.bookstore.exceptions.LocationNotFoundException;
-import com.bookstore.exceptions.PhysicStoreNotFoundException;
-import org.springframework.security.access.prepost.PreAuthorize;
+import com.bookstore.repository.JpaPhysicStoreRepository;
+import com.bookstore.services.impl.AbstractInventoryService;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
+@Transactional
 public class PhysicStoreService extends AbstractInventoryService {
 
-    private final PhysicStoreRepository storeRepository;
+    private final JpaPhysicStoreRepository storeRepository;
 
-    public PhysicStoreService(PhysicStoreRepository storeRepository,
-                              InventoryHolder storeInventory) {
-        super(storeInventory);
+    public PhysicStoreService(JpaPhysicStoreRepository storeRepository) {
         this.storeRepository = storeRepository;
     }
 
     @Override
     protected void validateLocation(UUID storeId) throws LocationNotFoundException {
-        List<PhysicStore> store = storeRepository.findById(storeId);
-        if (store == null || store.isEmpty()) {
+        if (!storeRepository.existsById(storeId)) {
             throw new LocationNotFoundException(storeId);
         }
     }
 
-    protected InsufficientStockException createInsufficientStockException(Book book, int requestedQuantity) {
-        int available = inventoryHolder.getItemQuantity(book);
-        return new InsufficientStockException(book.getTitle(), available, requestedQuantity);
+    @Override
+    protected Optional<? extends InventoryHolder> findInventoryHolderById(UUID locationId) {
+        return storeRepository.findById(locationId);
     }
 
     @Override
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
-    public void addBook(UUID locationId, Book book, int quantity) {
-        if (book == null) throw new NullPointerException("Book must not be null");
-        if (quantity <= 0) throw new IllegalArgumentException("Quantity must be positive");
-        super.addBook(locationId, book, quantity);
+    protected void saveInventoryHolder(InventoryHolder holder) {
+        if (holder instanceof PhysicStore store) {
+            storeRepository.save(store);
+        } else {
+            throw new IllegalArgumentException("Expected PhysicStore, got " + holder.getClass());
+        }
     }
 
-    @Override
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
-    public void removeBook(UUID locationId, Book book, int quantity) throws InsufficientStockException {
-        super.removeBook(locationId, book, quantity);
-    }
-
-    @Override
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
-    public Map<Book, Integer> getInventory(UUID locationId) {
-        return super.getInventory(locationId);
-    }
-
-    @Override
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
-    public List<Book> getLowStockBooks(UUID locationId, int threshold) {
-        return super.getLowStockBooks(locationId, threshold);
-    }
 }
-

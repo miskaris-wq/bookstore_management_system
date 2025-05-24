@@ -1,137 +1,148 @@
 package test;
 
-import com.bookstore.dao.api.WarehouseRepository;
 import com.bookstore.domain.Book;
-import com.bookstore.domain.InventoryHolder;
+import com.bookstore.domain.InventoryItem;
 import com.bookstore.domain.Warehouse;
 import com.bookstore.exceptions.InsufficientStockException;
 import com.bookstore.exceptions.LocationNotFoundException;
+import com.bookstore.repository.JpaWarehouseRepository;
 import com.bookstore.services.WarehouseService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-@ExtendWith(MockitoExtension.class)
 class WarehouseServiceTest {
 
-    @Mock
-    private WarehouseRepository warehouseRepository;
-
-    @Mock
-    private InventoryHolder warehouseInventory;
-
-    @InjectMocks
+    private JpaWarehouseRepository warehouseRepository;
     private WarehouseService warehouseService;
 
+    private UUID warehouseId;
     private Warehouse warehouse;
     private Book book;
-    private UUID warehouseId;
 
     @BeforeEach
     void setUp() {
+        warehouseRepository = mock(JpaWarehouseRepository.class);
+        warehouseService = new WarehouseService(warehouseRepository);
+
         warehouseId = UUID.randomUUID();
-        warehouse = new Warehouse("123 Main St");
-        book = new Book(
-                UUID.randomUUID(),
-                "Effective Java",
-                "Joshua Bloch",
-                "Programming",
-                BigDecimal.valueOf(29.99),
-                2018
-        );
+        warehouse = new Warehouse();
+        warehouse.setId(warehouseId);
+        warehouse.setInventoryItems(new HashSet<>());
+
+        book = new Book();
+        book.setId(UUID.randomUUID());
+        book.setTitle("Effective Java");
     }
 
     @Test
-    void addBook_ShouldAddItemToInventory_WhenWarehouseExists() {
-        when(warehouseRepository.findById(warehouseId)).thenReturn(List.of(warehouse));
+    void addBook_newBook_addsToInventory() {
+        when(warehouseRepository.existsById(warehouseId)).thenReturn(true);
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+
         warehouseService.addBook(warehouseId, book, 10);
-        verify(warehouseInventory, times(1)).addItem(book, 10);
+
+        assertEquals(1, warehouse.getInventoryItems().size());
+        InventoryItem item = warehouse.getInventoryItems().iterator().next();
+        assertEquals(book, item.getBook());
+        assertEquals(10, item.getQuantity());
+        verify(warehouseRepository).save(warehouse);
     }
 
     @Test
-    void addBook_ShouldThrowException_WhenWarehouseNotFound() {
-        when(warehouseRepository.findById(warehouseId)).thenReturn(List.of());
-        assertThrows(LocationNotFoundException.class,
-                () -> warehouseService.addBook(warehouseId, book, 10));
+    void addBook_existingBook_incrementsQuantity() {
+        InventoryItem existing = new InventoryItem(book, warehouse, 5);
+        warehouse.getInventoryItems().add(existing);
+
+        when(warehouseRepository.existsById(warehouseId)).thenReturn(true);
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+
+        warehouseService.addBook(warehouseId, book, 3);
+
+        assertEquals(1, warehouse.getInventoryItems().size());
+        InventoryItem item = warehouse.getInventoryItems().iterator().next();
+        assertEquals(8, item.getQuantity());
+        verify(warehouseRepository).save(warehouse);
     }
 
     @Test
-    void addBook_ShouldThrowException_WhenQuantityIsInvalid() {
-        assertThrows(IllegalArgumentException.class,
-                () -> warehouseService.addBook(warehouseId, book, -1));
+    void removeBook_sufficientStock_decreasesQuantity() throws InsufficientStockException {
+        InventoryItem item = new InventoryItem(book, warehouse, 7);
+        warehouse.getInventoryItems().add(item);
+
+        when(warehouseRepository.existsById(warehouseId)).thenReturn(true);
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+
+        warehouseService.removeBook(warehouseId, book, 4);
+
+        assertEquals(3, item.getQuantity());
+        verify(warehouseRepository).save(warehouse);
     }
 
     @Test
-    void removeBook_ShouldRemoveItemFromInventory_WhenStockIsSufficient() throws InsufficientStockException {
-        when(warehouseRepository.findById(warehouseId)).thenReturn(List.of(warehouse));
-        doNothing().when(warehouseInventory).removeItem(book, 10);
+    void removeBook_insufficientStock_throwsException() {
+        InventoryItem item = new InventoryItem(book, warehouse, 2);
+        warehouse.getInventoryItems().add(item);
 
-        warehouseService.removeBook(warehouseId, book, 10);
+        when(warehouseRepository.existsById(warehouseId)).thenReturn(true);
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
 
-        verify(warehouseInventory).removeItem(book, 10);
-        verify(warehouseInventory, never()).getItemQuantity(book);
-        verifyNoMoreInteractions(warehouseInventory);
+        assertThrows(InsufficientStockException.class, () -> warehouseService.removeBook(warehouseId, book, 5));
     }
 
     @Test
-    void removeBook_ShouldThrowException_WhenStockIsInsufficient() {
-        when(warehouseRepository.findById(warehouseId)).thenReturn(List.of(warehouse));
-        when(warehouseInventory.getItemQuantity(book)).thenReturn(5);
-        doThrow(new IllegalStateException("Not enough stock"))
-                .when(warehouseInventory).removeItem(book, 10);
+    void removeBook_removesItemWhenZero() throws InsufficientStockException {
+        InventoryItem item = new InventoryItem(book, warehouse, 3);
+        warehouse.getInventoryItems().add(item);
 
-        InsufficientStockException exception = assertThrows(InsufficientStockException.class,
-                () -> warehouseService.removeBook(warehouseId, book, 10));
+        when(warehouseRepository.existsById(warehouseId)).thenReturn(true);
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
 
-        assertEquals(book.getTitle(), exception.getBookTitle());
-        assertEquals(5, exception.getAvailable());
-        assertEquals(10, exception.getRequested());
+        warehouseService.removeBook(warehouseId, book, 3);
 
-        verify(warehouseInventory).getItemQuantity(book);
-        verify(warehouseInventory).removeItem(book, 10);
+        assertTrue(warehouse.getInventoryItems().isEmpty());
+        verify(warehouseRepository).save(warehouse);
     }
 
     @Test
-    void getInventory_ShouldReturnInventory_WhenWarehouseExists() {
-        when(warehouseRepository.findById(warehouseId)).thenReturn(List.of(warehouse));
-        when(warehouseInventory.getInventory()).thenReturn(Map.of(book, 10));
+    void getInventory_returnsCorrectMap() {
+        warehouse.getInventoryItems().add(new InventoryItem(book, warehouse, 12));
+
+        when(warehouseRepository.existsById(warehouseId)).thenReturn(true);
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+
         Map<Book, Integer> inventory = warehouseService.getInventory(warehouseId);
+
         assertEquals(1, inventory.size());
-        assertEquals(10, inventory.get(book));
+        assertEquals(12, inventory.get(book));
     }
 
     @Test
-    void getLowStockBooks_ShouldReturnLowStockItems() {
-        Book lowStockBook = new Book(
-                UUID.randomUUID(),
-                "Clean Code",
-                "Robert Martin",
-                "Programming",
-                BigDecimal.valueOf(35.99),
-                2008
-        );
-        when(warehouseRepository.findById(warehouseId)).thenReturn(List.of(warehouse));
-        when(warehouseInventory.getInventory()).thenReturn(
-                Map.of(book, 15, lowStockBook, 5));
-        List<Book> lowStockBooks = warehouseService.getLowStockBooks(warehouseId, 10);
-        assertEquals(1, lowStockBooks.size());
-        assertEquals(lowStockBook, lowStockBooks.getFirst());
+    void getLowStockBooks_returnsBooksBelowThreshold() {
+        Book anotherBook = new Book();
+        anotherBook.setId(UUID.randomUUID());
+        anotherBook.setTitle("Java Concurrency");
+
+        warehouse.getInventoryItems().add(new InventoryItem(book, warehouse, 4));
+        warehouse.getInventoryItems().add(new InventoryItem(anotherBook, warehouse, 9));
+
+        when(warehouseRepository.existsById(warehouseId)).thenReturn(true);
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+
+        List<Book> result = warehouseService.getLowStockBooks(warehouseId, 5);
+
+        assertEquals(1, result.size());
+        assertEquals(book, result.get(0));
     }
 
     @Test
-    void getLowStockBooks_ShouldThrowException_WhenThresholdIsNegative() {
-        assertThrows(IllegalArgumentException.class,
-                () -> warehouseService.getLowStockBooks(warehouseId, -1));
+    void validateLocation_notExists_throwsLocationNotFoundException() {
+        when(warehouseRepository.existsById(warehouseId)).thenReturn(false);
+
+        assertThrows(LocationNotFoundException.class, () -> warehouseService.getInventory(warehouseId));
     }
 }

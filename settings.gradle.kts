@@ -11,4 +11,4 @@ plugins {
 }
 
 rootProject.name = "krasskazova"
-include("app", "list", "utilities")
+include("app")

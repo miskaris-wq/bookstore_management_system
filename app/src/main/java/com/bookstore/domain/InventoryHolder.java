@@ -1,50 +1,45 @@
 package com.bookstore.domain;
 
-import com.bookstore.domain.inventoryconfig.InventoryConfig;
+import jakarta.persistence.*;
+import java.util.*;
 
-import java.util.Map;
-import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
+@Entity
+@Inheritance(strategy = InheritanceType.JOINED)
+@Table(name = "inventory_holders")
+public abstract class InventoryHolder {
 
-public abstract class InventoryHolder extends InventoryConfig {
-    protected final Map<Book, Integer> inventory = new ConcurrentHashMap<>();
+    @Id
+    @GeneratedValue
+    @Column(columnDefinition = "BINARY(16)")
+    private UUID id;
 
-    public void addItem(Book book, int quantity) {
-        validateAddition(book, quantity);
-        inventory.merge(book, quantity, Integer::sum);
+    @OneToMany(mappedBy = "inventoryHolder", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<InventoryItem> inventoryItems = new HashSet<>();
+
+    @Column(nullable = false)
+    private String address;
+
+    public UUID getId() {
+        return id;
     }
 
-    public void removeItem(Book book, int quantity) {
-        validateRemoval(book, quantity);
-        inventory.computeIfPresent(book, (k, v) -> v - quantity);
+    public Set<InventoryItem> getInventoryItems() {
+        return inventoryItems;
     }
 
-    public boolean hasItem(Book book) {
-        return inventory.containsKey(book) && inventory.get(book) > 0;
+    public String getAddress() {
+        return address;
     }
 
-    public int getItemQuantity(Book book) {
-        return inventory.getOrDefault(book, 0);
+    public void setId(UUID id) {
+        this.id = id;
     }
 
-    public Map<Book, Integer> getInventory() {
-        return inventory;
+    public void setInventoryItems(Set<InventoryItem> inventoryItems) {
+        this.inventoryItems = inventoryItems;
     }
 
-    protected void validateAddition(Book book, int quantity) {
-        Objects.requireNonNull(book, "Book cannot be null");
-        if (quantity <= 0) {
-            throw new IllegalArgumentException("Quantity must be positive");
-        }
-    }
-
-    protected void validateRemoval(Book book, int quantity) {
-        validateAddition(book, quantity);
-        if (!inventory.containsKey(book)) {
-            throw new IllegalArgumentException("Item not found in inventory");
-        }
-        if (inventory.get(book) < quantity) {
-            throw new IllegalStateException("Insufficient quantity");
-        }
+    protected void setAddress(String address) {
+        this.address = Objects.requireNonNull(address, "Address cannot be null");
     }
 }

@@ -2,7 +2,7 @@ package com.bookstore.controller;
 
 import com.bookstore.domain.Book;
 import com.bookstore.dto.BookDTO;
-import com.bookstore.mapper.BookMapper;
+import com.bookstore.mapper.impl.BookMapper;
 import com.bookstore.services.BookService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -15,33 +15,46 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/books")
 public class BookController {
     private final BookService bookService;
+    private final BookMapper bookMapper;
 
-    public BookController(BookService bookService) {
+    private static final String ROLE_USER = "USER";
+    private static final String ROLE_ADMIN = "ADMIN";
+    private static final String ROLE_MANAGER = "MANAGER";
+    private static final String ROLE_EMPLOYEE = "EMPLOYEE";
+
+    private static final String ANY_AUTHENTICATED =
+            "hasAnyRole('" + ROLE_USER + "','" + ROLE_ADMIN + "','" + ROLE_MANAGER + "','" + ROLE_EMPLOYEE + "')";
+    private static final String ADMIN_ONLY = "hasRole('" + ROLE_ADMIN + "')";
+
+    public BookController(BookService bookService, BookMapper bookMapper) {
         this.bookService = bookService;
+        this.bookMapper = bookMapper;
     }
 
-    @PreAuthorize("hasAnyRole('USER', 'ADMIN', 'STORE', 'WAREHOUSE')")
+    @PreAuthorize(ANY_AUTHENTICATED)
     @GetMapping
     public List<BookDTO> getAllBooks() {
         return bookService.getAllBooks().stream()
-                .map(BookMapper::toDTO)
+                .map(bookMapper::toDTO)
                 .collect(Collectors.toList());
     }
-    @PreAuthorize("hasAnyRole('USER', 'ADMIN', 'STORE', 'WAREHOUSE')")
+
+    @PreAuthorize(ANY_AUTHENTICATED)
     @GetMapping("/{id}")
     public BookDTO getBookById(@PathVariable UUID id) {
         return bookService.findBookById(id)
-                .map(BookMapper::toDTO)
+                .map(bookMapper::toDTO)
                 .orElseThrow(() -> new IllegalArgumentException("Book not found"));
     }
-    @PreAuthorize("hasRole('ADMIN')")
+
+    @PreAuthorize(ADMIN_ONLY)
     @PostMapping
     public void addBook(@RequestBody BookDTO dto) {
         Book book = new Book(dto.getTitle(), dto.getAuthor(), dto.getGenre(), dto.getPrice(), dto.getPublicationYear());
         bookService.addBook(book);
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize(ADMIN_ONLY)
     @DeleteMapping("/{id}")
     public void deleteBook(@PathVariable UUID id) {
         bookService.removeBook(id);

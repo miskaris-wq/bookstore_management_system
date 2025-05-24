@@ -1,124 +1,148 @@
 package test;
 
-import com.bookstore.dao.api.PhysicStoreRepository;
 import com.bookstore.domain.Book;
-import com.bookstore.domain.InventoryHolder;
+import com.bookstore.domain.InventoryItem;
 import com.bookstore.domain.PhysicStore;
 import com.bookstore.exceptions.InsufficientStockException;
+import com.bookstore.exceptions.LocationNotFoundException;
+import com.bookstore.repository.JpaPhysicStoreRepository;
 import com.bookstore.services.PhysicStoreService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.math.BigDecimal;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class PhysicStoreServiceTest {
 
-    private PhysicStoreRepository storeRepository;
-    private InventoryHolder storeInventory;
+    private JpaPhysicStoreRepository storeRepository;
     private PhysicStoreService storeService;
 
-    private Book testBook;
     private UUID storeId;
     private PhysicStore store;
+    private Book book;
 
     @BeforeEach
     void setUp() {
-        storeRepository = mock(PhysicStoreRepository.class);
-        storeInventory = mock(InventoryHolder.class);
-        storeService = new PhysicStoreService(storeRepository, storeInventory);
+        storeRepository = mock(JpaPhysicStoreRepository.class);
+        storeService = new PhysicStoreService(storeRepository);
 
-        testBook = new Book("Test Book", "Author", "Genre", new BigDecimal("45.99"), 2022);
-        store = new PhysicStore("Test Store", "Test Address");
-        storeId = store.getId();
+        storeId = UUID.randomUUID();
+        store = new PhysicStore();
+        store.setId(storeId);
+        store.setInventoryItems(new HashSet<>());
+
+        book = new Book();
+        book.setId(UUID.randomUUID());
+        book.setTitle("Clean Code");
     }
 
     @Test
-    void addBook_shouldAddBookIfStoreExists() throws Exception {
-        when(storeRepository.findById(storeId)).thenReturn(List.of(store));
+    void addBook_newBook_addsToInventory() {
+        when(storeRepository.existsById(storeId)).thenReturn(true);
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store));
 
-        storeService.addBook(storeId, testBook, 5);
+        storeService.addBook(storeId, book, 5);
 
-        verify(storeInventory).addItem(testBook, 5);
+        assertEquals(1, store.getInventoryItems().size());
+        InventoryItem item = store.getInventoryItems().iterator().next();
+        assertEquals(book, item.getBook());
+        assertEquals(5, item.getQuantity());
+        verify(storeRepository).save(store);
     }
 
     @Test
-    void addBook_shouldThrowExceptionIfBookIsNull() {
-        assertThrows(NullPointerException.class, () ->
-                storeService.addBook(storeId, null, 5));
+    void addBook_existingBook_incrementsQuantity() {
+        InventoryItem existing = new InventoryItem(book, store, 3);
+        store.getInventoryItems().add(existing);
+
+        when(storeRepository.existsById(storeId)).thenReturn(true);
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store));
+
+        storeService.addBook(storeId, book, 2);
+
+        assertEquals(1, store.getInventoryItems().size());
+        InventoryItem item = store.getInventoryItems().iterator().next();
+        assertEquals(5, item.getQuantity());
+        verify(storeRepository).save(store);
     }
 
     @Test
-    void addBook_shouldThrowExceptionIfQuantityIsNonPositive() {
-        assertThrows(IllegalArgumentException.class, () ->
-                storeService.addBook(storeId, testBook, 0));
+    void removeBook_sufficientStock_decreasesQuantity() throws InsufficientStockException {
+        InventoryItem item = new InventoryItem(book, store, 10);
+        store.getInventoryItems().add(item);
+
+        when(storeRepository.existsById(storeId)).thenReturn(true);
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store));
+
+        storeService.removeBook(storeId, book, 4);
+
+        assertEquals(6, item.getQuantity());
+        verify(storeRepository).save(store);
     }
 
     @Test
-    void addBook_shouldThrowIfStoreNotFound() {
-        when(storeRepository.findById(storeId)).thenReturn(Collections.emptyList());
+    void removeBook_insufficientStock_throwsException() {
+        InventoryItem item = new InventoryItem(book, store, 2);
+        store.getInventoryItems().add(item);
 
-        assertThrows(RuntimeException.class, () ->
-                storeService.addBook(storeId, testBook, 1));
+        when(storeRepository.existsById(storeId)).thenReturn(true);
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store));
+
+        assertThrows(InsufficientStockException.class, () -> storeService.removeBook(storeId, book, 3));
     }
 
     @Test
-    void removeBook_shouldRemoveBookIfEnoughStock() throws Exception {
-        when(storeRepository.findById(storeId)).thenReturn(List.of(store));
-        doNothing().when(storeInventory).removeItem(testBook, 3);
+    void removeBook_removesItemWhenZero() throws InsufficientStockException {
+        InventoryItem item = new InventoryItem(book, store, 2);
+        store.getInventoryItems().add(item);
 
-        storeService.removeBook(storeId, testBook, 3);
+        when(storeRepository.existsById(storeId)).thenReturn(true);
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store));
 
-        verify(storeInventory).removeItem(testBook, 3);
+        storeService.removeBook(storeId, book, 2);
+
+        assertTrue(store.getInventoryItems().isEmpty());
+        verify(storeRepository).save(store);
     }
 
     @Test
-    void removeBook_shouldThrowInsufficientStockException() throws Exception {
-        when(storeRepository.findById(storeId)).thenReturn(List.of(store));
-        when(storeInventory.getItemQuantity(testBook)).thenReturn(2);
-        doThrow(new IllegalStateException()).when(storeInventory).removeItem(testBook, 3);
+    void getInventory_returnsCorrectMap() {
+        store.getInventoryItems().add(new InventoryItem(book, store, 8));
 
-        InsufficientStockException ex = assertThrows(InsufficientStockException.class, () ->
-                storeService.removeBook(storeId, testBook, 3));
+        when(storeRepository.existsById(storeId)).thenReturn(true);
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store));
 
-        assertTrue(ex.getMessage().contains(testBook.getTitle()));
+        Map<Book, Integer> inventory = storeService.getInventory(storeId);
+
+        assertEquals(1, inventory.size());
+        assertEquals(8, inventory.get(book));
     }
 
     @Test
-    void getInventory_shouldReturnInventoryIfStoreExists() throws Exception {
-        Map<Book, Integer> inventoryMap = Map.of(testBook, 10);
-        when(storeRepository.findById(storeId)).thenReturn(List.of(store));
-        when(storeInventory.getInventory()).thenReturn(inventoryMap);
+    void getLowStockBooks_returnsBooksBelowThreshold() {
+        Book anotherBook = new Book();
+        anotherBook.setId(UUID.randomUUID());
+        anotherBook.setTitle("Refactoring");
 
-        Map<Book, Integer> result = storeService.getInventory(storeId);
+        store.getInventoryItems().add(new InventoryItem(book, store, 3));
+        store.getInventoryItems().add(new InventoryItem(anotherBook, store, 10));
 
-        assertEquals(10, result.get(testBook));
+        when(storeRepository.existsById(storeId)).thenReturn(true);
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store));
+
+        List<Book> result = storeService.getLowStockBooks(storeId, 5);
+
+        assertEquals(1, result.size());
+        assertEquals(book, result.get(0));
     }
 
     @Test
-    void getLowStockBooks_shouldReturnFilteredList() throws Exception {
-        when(storeRepository.findById(storeId)).thenReturn(List.of(store));
-        when(storeInventory.getInventory()).thenReturn(Map.of(testBook, 2));
+    void validateLocation_notExists_throwsLocationNotFoundException() {
+        when(storeRepository.existsById(storeId)).thenReturn(false);
 
-        List<Book> lowStockBooks = storeService.getLowStockBooks(storeId, 5);
-
-        assertEquals(1, lowStockBooks.size());
-        assertEquals(testBook, lowStockBooks.getFirst());
-    }
-
-    @Test
-    void getLowStockBooks_shouldReturnEmptyListIfNoBooksBelowThreshold() throws Exception {
-        when(storeRepository.findById(storeId)).thenReturn(List.of(store));
-        when(storeInventory.getInventory()).thenReturn(Map.of(testBook, 10));
-
-        List<Book> lowStockBooks = storeService.getLowStockBooks(storeId, 5);
-
-        assertTrue(lowStockBooks.isEmpty());
+        assertThrows(LocationNotFoundException.class, () -> storeService.getInventory(storeId));
     }
 }

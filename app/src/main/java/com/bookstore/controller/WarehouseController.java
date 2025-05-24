@@ -1,46 +1,37 @@
 package com.bookstore.controller;
 
-import com.bookstore.domain.Book;
 import com.bookstore.dto.BookDTO;
 import com.bookstore.exceptions.InsufficientStockException;
 import com.bookstore.exceptions.WarehouseNotFoundException;
-import com.bookstore.mapper.BookMapper;
+import com.bookstore.mapper.impl.BookMapper;
 import com.bookstore.services.WarehouseService;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/warehouses")
-public class WarehouseController {
+public class WarehouseController extends AbstractInventoryController {
     private final WarehouseService warehouseService;
 
-    public WarehouseController(WarehouseService warehouseService) {
-        this.warehouseService = warehouseService;
+    public WarehouseController(WarehouseService warehouseService, BookMapper bookMapper, WarehouseService warehouseService1) {
+        super( bookMapper);
+        this.warehouseService = warehouseService1;
     }
 
-    @PreAuthorize("hasRole('WAREHOUSE')")
-    @GetMapping("/{id}/inventory")
+    @Override
     public Map<BookDTO, Integer> getInventory(@PathVariable UUID id) throws WarehouseNotFoundException {
-        return warehouseService.getInventory(id).entrySet().stream()
-                .collect(Collectors.toMap(
-                        e -> BookMapper.toDTO(e.getKey()),
-                        Map.Entry::getValue
-                ));
+        return convertInventory(warehouseService.getInventory(id));
     }
-    @PreAuthorize("hasRole('WAREHOUSE')")
-    @PostMapping("/{id}/add")
-    public void addBook(@PathVariable UUID id, @RequestBody BookDTO bookDTO, @RequestParam int quantity) throws WarehouseNotFoundException {
-        Book book = BookMapper.fromDTO(bookDTO);
-        warehouseService.addBook(id, book, quantity);
+
+    @Override
+    public void addBook(@PathVariable UUID id, @RequestBody BookDTO dto, @RequestParam int quantity) throws WarehouseNotFoundException {
+        warehouseService.addBook(id, bookMapper.fromDTO(dto), quantity);
     }
-    @PreAuthorize("hasRole('WAREHOUSE')")
-    @PostMapping("/{id}/remove")
-    public void removeBook(@PathVariable UUID id, @RequestBody BookDTO bookDto, @RequestParam int quantity) throws InsufficientStockException, WarehouseNotFoundException {
-        Book book = BookMapper.fromDTO(bookDto);
-        warehouseService.removeBook(id, book, quantity);
+
+    @Override
+    public void removeBook(@PathVariable UUID id, @RequestBody BookDTO dto, @RequestParam int quantity) throws InsufficientStockException, WarehouseNotFoundException {
+        warehouseService.removeBook(id, bookMapper.fromDTO(dto), quantity);
     }
 }

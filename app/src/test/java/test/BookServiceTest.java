@@ -1,6 +1,6 @@
 package test;
 
-import com.bookstore.dao.api.BookRepository;
+import com.bookstore.repository.JpaBookRepository;
 import com.bookstore.domain.Book;
 import com.bookstore.services.BookService;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,12 +16,11 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-
 @ExtendWith(MockitoExtension.class)
 class BookServiceTest {
 
     @Mock
-    private BookRepository bookRepository;
+    private JpaBookRepository bookRepository;
 
     @InjectMocks
     private BookService bookService;
@@ -43,20 +42,20 @@ class BookServiceTest {
     }
 
     @Test
-    void addBook_ShouldCallRepositoryAdd() {
+    void addBook_ShouldCallRepositorySave() {
         bookService.addBook(book);
-        verify(bookRepository, times(1)).add(book);
+        verify(bookRepository, times(1)).save(book);
     }
 
     @Test
     void addBook_ShouldThrowException_WhenBookIsNull() {
         assertThrows(NullPointerException.class, () -> bookService.addBook(null));
-        verify(bookRepository, never()).add(any());
+        verify(bookRepository, never()).save(any());
     }
 
     @Test
     void findBookById_ShouldReturnBook_WhenBookExists() {
-        when(bookRepository.findById(bookId)).thenReturn(List.of(book));
+        when(bookRepository.findById(bookId)).thenReturn(Optional.of(book));
         Optional<Book> result = bookService.findBookById(bookId);
         assertTrue(result.isPresent());
         assertEquals(book, result.get());
@@ -64,29 +63,29 @@ class BookServiceTest {
 
     @Test
     void findBookById_ShouldReturnEmpty_WhenBookDoesNotExist() {
-        when(bookRepository.findById(bookId)).thenReturn(Collections.emptyList());
+        when(bookRepository.findById(bookId)).thenReturn(Optional.empty());
         Optional<Book> result = bookService.findBookById(bookId);
         assertTrue(result.isEmpty());
     }
 
     @Test
     void groupBooksByGenre_ShouldReturnGroupedBooks() {
-        // Given
         Book book1 = new Book(UUID.randomUUID(), "Book 1", "Author 1", "Fantasy", BigDecimal.TEN, 2020);
         Book book2 = new Book(UUID.randomUUID(), "Book 2", "Author 2", "Fantasy", BigDecimal.TEN, 2021);
         Book book3 = new Book(UUID.randomUUID(), "Book 3", "Author 3", "Sci-Fi", BigDecimal.TEN, 2022);
 
         when(bookRepository.findAll()).thenReturn(List.of(book1, book2, book3));
 
-        // When
         Map<String, List<Book>> groupedBooks = bookService.groupBooksByGenre();
 
-        // Then
+
         assertNotNull(groupedBooks);
-        assertEquals(2, groupedBooks.size());
+        assertTrue(groupedBooks.containsKey("fantasy"), "Key 'fantasy' absent");
+        assertTrue(groupedBooks.containsKey("sci-fi"), "Key 'sci-fi' absent");
         assertEquals(2, groupedBooks.get("fantasy").size());
         assertEquals(1, groupedBooks.get("sci-fi").size());
     }
+
 
     @Test
     void getAllBooks_ShouldReturnAllBooks() {
@@ -98,14 +97,19 @@ class BookServiceTest {
 
     @Test
     void removeBook_ShouldReturnTrue_WhenBookExists() {
-        when(bookRepository.deleteById(bookId)).thenReturn(true);
+        when(bookRepository.existsById(bookId)).thenReturn(true);
+        doNothing().when(bookRepository).deleteById(bookId);
+
         assertTrue(bookService.removeBook(bookId));
+        verify(bookRepository).deleteById(bookId);
     }
 
     @Test
     void removeBook_ShouldReturnFalse_WhenBookDoesNotExist() {
-        when(bookRepository.deleteById(bookId)).thenReturn(false);
+        when(bookRepository.existsById(bookId)).thenReturn(false);
+
         assertFalse(bookService.removeBook(bookId));
+        verify(bookRepository, never()).deleteById(bookId);
     }
 
     @Test

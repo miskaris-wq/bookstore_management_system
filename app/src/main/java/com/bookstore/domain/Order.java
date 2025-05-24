@@ -1,102 +1,123 @@
 package com.bookstore.domain;
 
-import java.math.BigDecimal;
+import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.*;
-import org.springframework.stereotype.Component;
 
+@Entity
+@Table(name = "orders")
 public class Order {
-    private final UUID id;               // Уникальный идентификатор
-    private final String customerName;     // Имя клиента
-    private final String deliveryAddress;  // Адрес доставки
-    private final List<OrderItem> orderItems; // Список позиций
-    private final LocalDateTime orderDate; // Дата создания заказа
-    private OrderStatus status;            // Текущий статус
+
+    @Id
+    @GeneratedValue
+    @Column(name = "id", columnDefinition = "BINARY(16)")
+    private UUID id;
+
+    @Column(nullable = false)
+    private String customerName;
+
+    @Column(nullable = false)
+    private String deliveryAddress;
+
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<OrderItem> orderItems = new ArrayList<>();
+
+    @Column(nullable = false)
+    private LocalDateTime orderDate;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private OrderStatus status;
+
+
+    public Order() {
+    }
 
     public Order(String customerName, String deliveryAddress) {
-        this.id = UUID.randomUUID();
         this.customerName = validateString(customerName, "Имя клиента");
         this.deliveryAddress = validateString(deliveryAddress, "Адрес доставки");
-        this.orderItems = new ArrayList<>();
         this.orderDate = LocalDateTime.now();
         this.status = OrderStatus.NEW;
     }
 
-    public void addItem(OrderItem item) {
-        Objects.requireNonNull(item, "Позиция заказа не может быть null");
-        orderItems.add(item);
+    public UUID getId() {
+        return id;
     }
 
-    public void removeItem(OrderItem item) {
-        orderItems.remove(item);
+    public String getCustomerName() {
+        return customerName;
     }
 
-    public BigDecimal calculateTotal() {
-        return orderItems.stream()
-                .map(OrderItem::getItemTotal)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    public void setCustomerName(String customerName) {
+        this.customerName = validateString(customerName, "Имя клиента");
     }
 
-    public void processOrder() {
-        if (status != OrderStatus.NEW) {
-            throw new IllegalStateException("Заказ можно обрабатывать только из статуса NEW");
-        }
-        status = OrderStatus.PROCESSING;
+    public void setOrderItems(List<OrderItem> orderItems) {
+        this.orderItems = orderItems;
     }
 
-    public void shipOrder() {
-        if (status != OrderStatus.PROCESSED) {
-            throw new IllegalStateException("Заказ должен быть обработан перед отправкой");
-        }
-        status = OrderStatus.SHIPPED;
+    public String getDeliveryAddress() {
+        return deliveryAddress;
     }
 
-    public void deliverOrder() {
-        if (status != OrderStatus.SHIPPED) {
-            throw new IllegalStateException("Заказ должен быть отправлен перед доставкой");
-        }
-        status = OrderStatus.DELIVERED;
+    public void setDeliveryAddress(String deliveryAddress) {
+        this.deliveryAddress = validateString(deliveryAddress, "Адрес доставки");
     }
-
-    public void cancelOrder() {
-        if (status == OrderStatus.DELIVERED || status == OrderStatus.SHIPPED) {
-            throw new IllegalStateException("Заказ не может быть отменен");
-        }
-        status = OrderStatus.CANCELLED;
-    }
-
-    // Геттеры
-    public UUID getId() { return id; }
-    public String getCustomerName() { return customerName; }
-    public String getDeliveryAddress() { return deliveryAddress; }
 
     public List<OrderItem> getOrderItems() {
         return Collections.unmodifiableList(orderItems);
     }
 
-    public LocalDateTime getOrderDate() { return orderDate; }
-    public OrderStatus getStatus() { return status; }
+    public LocalDateTime getOrderDate() {
+        return orderDate;
+    }
+
+    public void setOrderDate(LocalDateTime orderDate) {
+        this.orderDate = orderDate;
+    }
+
+    public OrderStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(OrderStatus status) {
+        this.status = status;
+    }
+
 
     private String validateString(String value, String fieldName) {
         if (value == null || value.trim().isEmpty()) {
-            throw new IllegalArgumentException(fieldName + " не может быть пустым");
+            throw new IllegalArgumentException(fieldName + " cannot be empty");
         }
         return value.trim();
     }
 
     @Override
+    public boolean equals(Object o) {
+        if (o == null || getClass() != o.getClass()) return false;
+        Order order = (Order) o;
+        return Objects.equals(getId(), order.getId()) && Objects.equals(getCustomerName(), order.getCustomerName()) && Objects.equals(getDeliveryAddress(), order.getDeliveryAddress()) && Objects.equals(getOrderItems(), order.getOrderItems()) && Objects.equals(getOrderDate(), order.getOrderDate()) && getStatus() == order.getStatus();
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(getId(), getCustomerName(), getDeliveryAddress(), getOrderItems(), getOrderDate(), getStatus());
+    }
+
+    public void setId(UUID id) {
+        this.id = id;
+    }
+
+    @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        sb.append(String.format("Заказ #%s\n", id));
-        sb.append(String.format("Клиент: %s\n", customerName));
-        sb.append(String.format("Адрес: %s\n", deliveryAddress));
-        sb.append(String.format("Дата: %s\n", orderDate));
-        sb.append(String.format("Статус: %s\n", status));
-        sb.append("Позиции:\n");
-
+        sb.append(String.format("Order #%s\n", id));
+        sb.append(String.format("Customer: %s\n", customerName));
+        sb.append(String.format("Address: %s\n", deliveryAddress));
+        sb.append(String.format("Date: %s\n", orderDate));
+        sb.append(String.format("Status: %s\n", status));
+        sb.append("Items:\n");
         orderItems.forEach(item -> sb.append("  ").append(item).append("\n"));
-
-        sb.append(String.format("Итого: %.2f руб.", calculateTotal()));
         return sb.toString();
     }
 }

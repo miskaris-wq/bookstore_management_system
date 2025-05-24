@@ -32,4 +32,3 @@ public class WarehouseDTO {
         this.inventory = inventory;
     }
 }
-
